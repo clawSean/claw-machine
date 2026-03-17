@@ -1,0 +1,22 @@
+{
+  "name": "claw-machine",
+  "version": "0.1.0",
+  "description": "OpenClaw hook that auto-injects contact and group profiles into agent context at bootstrap",
+  "license": "MIT",
+  "openclaw": {
+    "hooks": ["./"]
+  },
+  "keywords": [
+    "openclaw",
+    "hook",
+    "profile",
+    "bootstrap",
+    "contacts",
+    "groups",
+    "social-awareness"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/clawSean/claw-machine.git"
+  }
+}
