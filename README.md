@@ -1,8 +1,10 @@
-# Claw Machine
+# 🦞 Claw Machine
 
-An [OpenClaw](https://openclaw.ai) hook that automatically injects contact and group profile files into agent context at bootstrap — so your agent already knows who it's talking to before the conversation starts.
+Drop a coin, grab a profile.
 
-## How It Works
+An [OpenClaw](https://openclaw.ai) hook that automatically injects contact and group profile files into agent context at bootstrap — so your agent already knows who it's talking to before the conversation starts. No more "who are you again?" every session.
+
+## ⚙️ How It Works
 
 When a session bootstraps, the hook parses the `sessionKey` to determine the channel, chat type, and user/group ID, then looks for a matching profile file in your workspace:
 
@@ -13,11 +15,11 @@ When a session bootstraps, the hook parses the `sessionKey` to determine the cha
 
 If the file exists, its contents are injected into the agent's bootstrap context automatically.
 
-### Group Social Awareness
+### 👥 Group Social Awareness
 
-When `groupInclusion` is enabled, the hook also scans the session transcript for recent sender IDs and injects their contact profiles (capped and truncated) alongside the group profile. This gives your agent lightweight social context about who's active in the conversation.
+When `groupInclusion` is enabled, the hook also scans the session transcript for recent sender IDs and injects their contact profiles (capped and truncated) alongside the group profile. Your agent walks into every group chat knowing the room.
 
-## Install
+## 📦 Install
 
 ```bash
 openclaw hooks install claw-machine
@@ -36,7 +38,7 @@ Then enable it:
 openclaw hooks enable profile-injector
 ```
 
-## Configuration
+## 🔧 Configuration
 
 Add to your `openclaw.json` under `hooks.internal.entries`:
 
@@ -73,7 +75,7 @@ Add to your `openclaw.json` under `hooks.internal.entries`:
 | `groupInclusion.maxContacts` | `number` | `3` | Max participant profiles to inject per group session |
 | `groupInclusion.profileDepth` | `string` | `"small"` | How much of each profile to inject: `"small"` (15 lines), `"medium"` (40 lines), or `"full"` |
 
-## Expected Directory Structure
+## 📂 Expected Directory Structure
 
 The hook expects profile markdown files in your workspace's `memory/` directory:
 
@@ -92,6 +94,6 @@ The hook expects profile markdown files in your workspace's `memory/` directory:
 
 File naming follows the pattern `<channel>-<id>.md`, derived from the session key.
 
-## License
+## 📄 License
 
-MIT
+MIT — grab it, use it, claw away.
