@@ -94,8 +94,28 @@ const handler = async (event: any) => {
     let exists = await fileExists(item.filePath);
 
     if (!exists && createOnMiss) {
-        // ... (creation logic remains same as previous version)
-        // Kept simple for readability; uses templatePath logic from prev version if needed
+      try {
+        const isContact = item.name === 'CONTACT_PROFILE.md' || item.name.startsWith('PROFILE_');
+        const templateRelPath = isContact ? contactTemplate : channelTemplate;
+        const templatePath = path.join(workspaceDir, templateRelPath);
+        const templateExists = await fileExists(templatePath);
+
+        let newContent = '';
+        if (templateExists) {
+          newContent = await fs.readFile(templatePath, 'utf-8');
+        } else {
+          // Minimal fallback if template is missing
+          const profileId = path.basename(item.filePath, '.md');
+          newContent = `---\nid: "${profileId}"\ncreated: "${new Date().toISOString().slice(0, 10)}"\n---\n\n# Profile: ${profileId}\n\n*Auto-created by profile-injector.*\n`;
+        }
+
+        await fs.mkdir(path.dirname(item.filePath), { recursive: true });
+        await fs.writeFile(item.filePath, newContent, 'utf-8');
+        exists = true;
+        console.log(`[profile-injector] Created missing profile: ${item.filePath}`);
+      } catch (err) {
+        console.error(`[profile-injector] Failed to create profile ${item.filePath}:`, err);
+      }
     }
 
     if (exists) {
