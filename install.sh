@@ -13,7 +13,7 @@ HOOK_NAME="profile-injector"
 HOOK_DIR="${HOME}/.openclaw/hooks/${HOOK_NAME}"
 
 echo "🦞 claw-machine: building handler..."
-npx esbuild handler.ts --bundle=false --platform=node --format=esm --outfile=handler.js
+npx esbuild handler.ts --bundle --platform=node --format=esm --outfile=handler.js --external:node:fs --external:node:path
 
 echo "📦 Installing to ${HOOK_DIR}..."
 mkdir -p "${HOOK_DIR}"
