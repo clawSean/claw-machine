@@ -21,21 +21,39 @@ When `groupInclusion` is enabled, the hook also scans the session transcript for
 
 ## 📦 Install
 
-```bash
-openclaw hooks install claw-machine
-```
-
-Or clone and link locally:
+> ⚠️ **The handler must be compiled before it can run.** `handler.ts` is the source — OpenClaw needs `handler.js`. Run the install script once per machine after cloning, and again after pulling changes that touch `handler.ts`.
 
 ```bash
 git clone https://github.com/clawSean/claw-machine.git
-openclaw hooks install -l ./claw-machine
+cd claw-machine
+bash install.sh
 ```
 
-Then enable it:
+That script:
+1. Compiles `handler.ts` → `handler.js` via `esbuild`
+2. Copies `handler.js` + `HOOK.md` into `~/.openclaw/hooks/profile-injector/`
+3. Prints confirmation
+
+Then restart the gateway:
 
 ```bash
-openclaw hooks enable profile-injector
+openclaw gateway restart
+```
+
+### Manual install (if you prefer)
+
+```bash
+npx esbuild handler.ts --bundle=false --platform=node --format=esm --outfile=handler.js
+mkdir -p ~/.openclaw/hooks/profile-injector
+cp handler.js HOOK.md ~/.openclaw/hooks/profile-injector/
+openclaw gateway restart
+```
+
+### Verify it loaded
+
+```bash
+openclaw hooks list
+# Should show: 👤 profile-injector ✓
 ```
 
 ## 🔧 Configuration

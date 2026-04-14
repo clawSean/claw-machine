@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "OpenClaw hook that auto-injects contact and group profiles into agent context at bootstrap",
   "license": "MIT",
+  "scripts": {
+    "build": "npx esbuild handler.ts --bundle=false --platform=node --format=esm --outfile=handler.js",
+    "install:hook": "npm run build && mkdir -p ~/.openclaw/hooks/profile-injector && cp handler.js HOOK.md ~/.openclaw/hooks/profile-injector/"
+  },
   "openclaw": {
     "hooks": ["./"]
   },
