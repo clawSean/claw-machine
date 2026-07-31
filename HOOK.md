@@ -1,29 +1,73 @@
 ---
 name: profile-injector
-description: "Injects contact and channel profile files into session context, with auto-roster for group members."
+description: "Injects canonical contact and room profiles with bounded cross-channel identity resolution and auto-roster."
 metadata:
   { "openclaw": { "emoji": "👤", "events": ["agent:bootstrap", "message:received", "command:new"] } }
 ---
 
-# Profile Injector (v3)
+# Profile Injector v4
 
-Listens for `agent:bootstrap` and `message:received` to automatically inject and maintain profile context.
+Injects deterministic social context before the system prompt is finalized and
+keeps group membership frontmatter synchronized.
 
-## What It Does
+## Event Behavior
 
-### Bootstrap (agent:bootstrap)
+### `agent:bootstrap`
 
-1. Parses the `sessionKey` to determine channel, chat type, and ID.
-2. **DMs**: Injects `CONTACT_PROFILE.md` from `memory/contacts/<channel>-<id>.md`.
-3. **Groups**: Injects `CHANNEL_PROFILE.md` from `memory/groups/<channel>-<id>.md`, then reads the frontmatter `members` array (a flat list of sender IDs) to inject each member's contact file as `MEMBER_PROFILE_<id>.md`.
+- Parses `agent:<agentId>:<channel>:<type>:<id>`.
+- Direct conversations resolve one canonical contact profile and inject it as
+  `CONTACT_PROFILE.md`.
+- Groups inject their exact room profile as `CHANNEL_PROFILE.md`, parse its
+  `members:` list, then resolve each member through the same contact index.
+- Member files are deduplicated by canonical path and bounded by count, depth,
+  and aggregate characters.
 
-### Auto-Roster (message:received)
+### `message:received` and `command:new`
 
-For group messages, checks whether the sender's ID is in the group file's frontmatter `members` array. If not:
-- Appends the sender ID to the `members` array in frontmatter
-- Optionally creates a contact file from the template (if `createOnMiss: true`)
+- For a group/channel session, add the sender to the room's `members:` list.
+- Serialize mutations per room and replace the file atomically.
+- If `createOnMiss` is enabled, resolve aliases before creating a contact so an
+  existing canonical profile does not gain a duplicate channel file.
+- Cache the fallback `openclaw.json` parse for one second because
+  `message:received` normally does not include `cfg`.
 
-This keeps the members list self-maintaining — after someone talks in a group, they're automatically registered for future bootstrap injection.
+## Contact Identity Contract
+
+```yaml
+---
+id: "telegram:123"
+identities:
+  - "telegram:123"
+  - "imessage:+12065550100"
+  - "sms:+12065550100"
+  - "slack:U01234567"
+---
+```
+
+Rules:
+
+1. Only explicit `channel:id` claims participate.
+2. Legacy `id:` remains an alias.
+3. Phone-like `+E.164` values get punctuation/spacing normalization; iMessage
+   emails and Twitter handles get case normalization.
+4. Names and prose never participate.
+5. Duplicate claims fail closed; exact-path fallback is not allowed to bypass a
+   known collision.
+6. `session.identityLinks` is intentionally not read or changed.
+7. Provider IDs that are account/workspace-scoped must be unique in this
+   contact set because the bootstrap session key has no separate account scope.
+
+## Resolution and Cache
+
+1. Lazily scan non-template Markdown files in the contact directory.
+2. Build `normalized identity -> canonical file` plus a collision map.
+3. Watch the directory and invalidate on edits.
+4. Rebuild after `cacheTtlMs` even without an event.
+5. Reuse the same map for all members in a group bootstrap.
+6. If the bounded index cannot build, log once and retain legacy exact lookup.
+
+The index is process-memory only. Contact Markdown remains the single persisted
+source of truth.
 
 ## Configuration
 
@@ -34,15 +78,24 @@ This keeps the members list self-maintaining — after someone talks in a group,
       "entries": {
         "profile-injector": {
           "enabled": true,
-          "createOnMiss": true,
+          "createOnMiss": false,
           "autoRoster": true,
+          "contactDir": "memory/contacts",
+          "groupDir": "memory/groups",
+          "contactTemplate": "memory/contacts/_EXAMPLE-contact.md",
+          "channelTemplate": "memory/groups/_EXAMPLE-channel.md",
+          "identityResolution": {
+            "enabled": true,
+            "cacheTtlMs": 60000,
+            "maxFiles": 1000,
+            "scanConcurrency": 4
+          },
           "groupInclusion": {
             "enabled": true,
             "maxContacts": 10,
-            "profileDepth": "full"
-          },
-          "contactTemplate": "memory/contacts/_EXAMPLE-contact.md",
-          "channelTemplate": "memory/groups/_EXAMPLE-channel.md"
+            "profileDepth": "full",
+            "maxTotalChars": 30000
+          }
         }
       }
     }
@@ -50,184 +103,81 @@ This keeps the members list self-maintaining — after someone talks in a group,
 }
 ```
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `createOnMiss` | `boolean` | `false` | Create profile files from templates when they don't exist |
-| `autoRoster` | `boolean` | `true` | Auto-add new group senders to frontmatter members list |
-| `groupInclusion.enabled` | `boolean` | `false` | Inject member contact files for group sessions |
-| `groupInclusion.maxContacts` | `number` | `10` | Max member profiles to inject per session |
-| `groupInclusion.profileDepth` | `string` | `"full"` | `"full"`, `"medium"` (40 lines), or `"small"` (15 lines) |
-| `contactTemplate` | `string` | `memory/contacts/_EXAMPLE-contact.md` | Workspace-relative path to contact template |
-| `channelTemplate` | `string` | `memory/groups/_EXAMPLE-channel.md` | Workspace-relative path to channel/group template |
+Defaults:
 
-## Critical: File Naming & Format
+| Setting | Default |
+|---|---:|
+| `createOnMiss` | `false` |
+| `autoRoster` | `true` |
+| `contactDir` | `memory/contacts` |
+| `groupDir` | `memory/groups` |
+| `identityResolution.enabled` | `true` |
+| `identityResolution.cacheTtlMs` | `60000` |
+| `identityResolution.maxFiles` | `1000` |
+| `identityResolution.scanConcurrency` | `4` |
+| `groupInclusion.enabled` | `false` |
+| `groupInclusion.maxContacts` | `10` |
+| `groupInclusion.profileDepth` | `full` |
+| `groupInclusion.maxTotalChars` | `30000` |
 
-⚠️ **The hook is strict about naming conventions and frontmatter format. Deviations will silently fail (no crash, but no injection).**
+All configurable file/directory paths are workspace-relative and are contained
+to the workspace. Unsafe paths fall back to the documented defaults and log
+once.
 
-### File Naming Convention
+## Profile Creation
 
-Files MUST follow `<channel>-<id>.md`, derived from the session key:
+`createOnMiss` checks the alias map and exact path before writing. Template
+placeholders are rendered:
 
-```
-Session key: agent:mainelobster:telegram:group:-1003813189624
-                                ^^^^^^^^       ^^^^^^^^^^^^^^
-                                channel        id
+- `<channel>`, `<user_id>`, `<group_id>`
+- `<channel>:<user_id>`, `<channel>:<group_id>`
+- `<Name>`, `YYYY-MM-DD`
 
-Contact file: memory/contacts/telegram-6566057320.md
-Group file:   memory/groups/telegram--1003813189624.md
-                            ^^^^^^^^^^^^^^^^^^^^^^^^
-                            channel + "-" + id (negative IDs produce double dash)
-```
+New contact profiles always gain an `identities:` list even when an older
+template does not include one. Writes use exclusive create semantics to avoid
+races.
 
-**Common gotcha:** Telegram group IDs are negative numbers (e.g., `-1003813189624`), so the filename has a double dash: `telegram--1003813189624.md`. This is correct — don't "fix" it.
-
-### Group File Frontmatter — Members Format
-
-The `members` key must be a YAML list of ID strings in the frontmatter block:
+## Group Roster Contract
 
 ```yaml
----
-id: "telegram:-1003813189624"
-name: "My Group"
-type: "group"
-
 members:
-  - "6566057320"
-  - "123456"
-  - "789012"
----
+  - "123456789"
+  - "U01234567"
+  - "+12065550100"
 ```
 
-**Rules:**
-- Each entry is just a sender ID (string or number — both work)
-- No names, roles, paths, or other metadata needed — the hook derives file paths from the ID + channel
-- The `members:` key must be inside the `---` frontmatter block, not in the markdown body
-- If `members:` is missing, the hook returns an empty list (no crash, just no member profiles injected)
-- If `autoRoster: true`, new senders are appended automatically on `message:received`
+Block lists and inline JSON arrays are accepted. Auto-roster writes the block
+form. Sender IDs must be bounded, nonempty, and path-safe.
 
-**❌ Wrong formats (will not parse):**
-```yaml
-# Inline array — not supported
-members: ["6566057320", "123456"]
+## Operational Verification
 
-# Objects — not supported
-members:
-  - id: "6566057320"
-    name: "JPop"
+Before deployment:
 
-# In markdown body — ignored by the hook
-## Members
-| Name | ID |
-|------|----|
-| JPop | 6566057320 |
+```bash
+npm test
+npm run audit -- /path/to/workspace/memory/contacts
+npm run benchmark -- /path/to/workspace/memory/contacts 100
 ```
 
-**✅ Correct format:**
-```yaml
-members:
-  - "6566057320"
-  - "123456"
-```
+After installing `handler.js` and `HOOK.md`, a full Gateway restart is required
+to import the new handler. Follow the operator's approval and rollback policy.
 
-### Contact File Naming
+Prove:
 
-Contact files follow `<channel>-<id>.md`:
+1. legacy exact-path DM;
+2. aliased cross-channel DM;
+3. group room plus aliased member profile;
+4. collision refusal;
+5. create-on-miss placeholder rendering;
+6. auto-roster under concurrent inbound events;
+7. cache rebuild after an alias edit.
 
-```
-memory/contacts/telegram-6566057320.md    ✅
-memory/contacts/telegram-123456.md        ✅
-memory/contacts/tg-6566057320.md          ❌ (wrong channel prefix)
-memory/contacts/jpop.md                   ❌ (no channel-id pattern)
-```
+## Failure Posture
 
-The channel prefix must match exactly what appears in the session key (typically `telegram`, `discord`, `signal`, etc.).
-
-## How Injection Shows Up
-
-After bootstrap, check `/context` or `/status` to verify injection:
-
-| Chat type | Injected file names |
-|-----------|-------------------|
-| DM | `CONTACT_PROFILE.md` |
-| Group | `CHANNEL_PROFILE.md` + `MEMBER_PROFILE_<id>.md` per member |
-
-Example `/context` output for a group with 2 members:
-```
-• CHANNEL_PROFILE.md: OK | raw 1,075 chars
-• MEMBER_PROFILE_6566057320.md: OK | raw 5,200 chars
-• MEMBER_PROFILE_123456.md: OK | raw 2,100 chars
-```
-
-## Installation
-
-1. Place in `<workspace>/hooks/profile-injector/` or `~/.openclaw/hooks/profile-injector/`.
-2. Compile: `npx esbuild handler.ts --bundle --platform=node --format=esm --outfile=handler.js --external:node:fs --external:node:path`
-3. Copy compiled files to managed dir: `cp handler.js HOOK.md ~/.openclaw/hooks/profile-injector/`
-4. Enable: `openclaw hooks enable profile-injector`
-5. Restart OpenClaw.
-
-## Troubleshooting
-
-### Profile not injected (silent failure)
-
-The hook never crashes — it silently skips files it can't find or parse. Check:
-
-1. **File exists?** Verify the exact path: `ls memory/contacts/telegram-<id>.md` or `memory/groups/telegram-<groupid>.md`
-2. **Filename correct?** Must be `<channel>-<id>.md`. Double-dash for negative group IDs is normal.
-3. **Frontmatter valid?** `members:` must be inside `---` block, each entry on its own `- "id"` line.
-4. **`groupInclusion.enabled`?** Must be `true` in config for member profiles to inject in groups.
-5. **Hook loaded?** Run `openclaw hooks list` — should show `👤 profile-injector ✓ ready`.
-6. **Gateway restarted?** Hook changes require a gateway restart to take effect.
-
-### Auto-roster not adding members
-
-- `autoRoster` defaults to `true`, but check config for `autoRoster: false`
-- Group file must already exist (auto-roster doesn't create group files, only `createOnMiss` at bootstrap does)
-- The `message:received` event must include `metadata.senderId` — verify your channel provides this
-- Chat type (group vs DM) is derived from `event.sessionKey`, not metadata — if the session key format is wrong, auto-roster won't detect groups
-- **Group must be configured in `channels.telegram.groups`** — unconfigured groups default to `requireMention: true`, and unmentioned messages are dropped *before* `message:received` fires. The hook also fires on `command:new` for rostering on `/new`.
-- `message:received` only fires for messages that pass the mention gate — if `requireMention: true` and the bot wasn't @-mentioned, the message never reaches dispatch and the hook never runs (unless `ingest: true` is set on the group)
-
-### Known OpenClaw event context limitations
-
-`message:received` events provide a **lean context** compared to `agent:bootstrap`:
-
-| Field | `agent:bootstrap` | `message:received` |
-|-------|-------------------|--------------------|
-| Field | `agent:bootstrap` | `message:received` | `command:new` |
-|-------|-------------------|--------------------|---------------|
-| `context.cfg` | ✅ | ❌ (not provided) | ✅ |
-| `context.workspaceDir` | ✅ | ❌ (not provided) | ❌ |
-| `context.bootstrapFiles` | ✅ (mutable) | ❌ | ❌ |
-| `context.metadata.chatType` | n/a | ❌ (not provided) | n/a |
-| `context.metadata.senderId` | n/a | ✅ | n/a |
-| `context.senderId` | n/a | n/a | ✅ |
-| `event.sessionKey` | ✅ | ✅ | ✅ |
-
-The hook handles this by:
-- Deriving chat type and group ID from `event.sessionKey` (not metadata)
-- Reading `workspace.dir` from `~/.openclaw/openclaw.json` when `cfg` is unavailable, falling back to `~/.openclaw/workspace`
-- Reading hook config from `~/.openclaw/openclaw.json` directly when `cfg` is unavailable
-
-> ⚠️ **`process.cwd()` is NOT the workspace dir.** The gateway's cwd is typically `/root` (or the user's home). Do not rely on it for workspace path resolution.
-
-### Gateway crash on restart
-
-SIGUSR1 hot-reload can occasionally crash the gateway if issued during active session processing. If `/new` stops responding after a hook deploy:
-- Check if gateway is running: `pgrep openclaw-gateway`
-- If dead, it should auto-restart (check with `ps aux | grep openclaw`)
-- Messages sent during the crash window (~5 seconds) are lost
-
-### Large member profiles bloating context
-
-Each injected member profile counts against `bootstrapMaxChars` / `bootstrapTotalMaxChars`. For groups with many members or large contact files:
-- Use `profileDepth: "small"` (15 lines) or `"medium"` (40 lines) to cap size
-- Reduce `maxContacts` to limit how many profiles are injected
-- Increase `agents.defaults.bootstrapMaxChars` if truncation warnings appear
-
-### Template files not found
-
-If `createOnMiss: true` but templates don't exist, the hook falls back to a minimal auto-generated profile. To use custom templates:
-- Place `_EXAMPLE-contact.md` in `memory/contacts/`
-- Place `_EXAMPLE-channel.md` in `memory/groups/`
-- Or set custom paths via `contactTemplate` / `channelTemplate` in config
+- Invalid session IDs or paths: skip.
+- Identity collision: log and inject no contact for that identity.
+- Index error/limit: log once and use legacy exact lookup.
+- Unreadable individual profile: log and skip it.
+- Missing group file: do not auto-roster; bootstrap may create it only when
+  `createOnMiss` is enabled.
+- No fuzzy fallback under any failure mode.

@@ -1,5 +1,26 @@
 # Changelog
 
+## v4 — Canonical Cross-Channel Identities, Bounded Hot Path, and Safer Writes
+
+*2026-07-31*
+
+- Added explicit `identities:` resolution with legacy `id:` compatibility.
+- Added fail-closed collision detection and exact-path fallback for unmigrated
+  profiles.
+- Added a bounded in-memory index, filesystem invalidation, TTL self-healing,
+  and one index build per group rather than per member.
+- Cached lean-event config reads instead of parsing `openclaw.json` twice per
+  group message.
+- Added configurable contact/group directories with workspace containment.
+- Generalized group rosters beyond numeric IDs and serialized atomic roster
+  writes to prevent concurrent-message loss.
+- Fixed `createOnMiss` to render template placeholders, add the initial alias,
+  and resolve canonical contacts before creating duplicates.
+- Added an aggregate group-member context budget.
+- Replaced the runtime `npx esbuild` dependency with Node 22's built-in
+  TypeScript transform and split the canonical source into auditable modules.
+- Added deterministic tests, contact audit tooling, and a VPS benchmark.
+
 ## v3 — Frontmatter-Based Member Roster with Auto-Sync
 
 *2026-04-15 — commit `297890e`*
@@ -65,4 +86,4 @@ The original design only rostered on `message:received`. But `/new` is a command
 
 - **SIGUSR1 does NOT reload ES module imports.** After editing `handler.js`, a full `openclaw gateway stop` + `start` is required. SIGUSR1 only hot-reloads config.
 - **`requireMention` defaults to `true`** for groups not explicitly in `channels.telegram.groups`. Unmentioned messages are dropped *before* `message:received` fires — the hook never sees them.
-- **Telegram group IDs are negative**, producing double-dash filenames like `telegram--1003813189624.md`. This is correct.
+- **Telegram group IDs are negative**, producing double-dash filenames like `telegram--1001234567890.md`. This is correct.

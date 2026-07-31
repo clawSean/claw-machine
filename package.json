@@ -1,11 +1,15 @@
 {
   "name": "claw-machine",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "description": "OpenClaw hook that auto-injects contact and group profiles into agent context at bootstrap",
+  "type": "module",
   "license": "MIT",
   "scripts": {
-    "build": "npx esbuild handler.ts --bundle=false --platform=node --format=esm --outfile=handler.js",
-    "install:hook": "npm run build && mkdir -p ~/.openclaw/hooks/profile-injector && cp handler.js HOOK.md ~/.openclaw/hooks/profile-injector/"
+    "build": "node --disable-warning=ExperimentalWarning scripts/build.mjs",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "benchmark": "npm run build && node scripts/benchmark.mjs",
+    "audit": "npm run build && node scripts/audit-contacts.mjs",
+    "install:hook": "npm run test && mkdir -p ~/.openclaw/hooks/profile-injector && cp handler.js HOOK.md ~/.openclaw/hooks/profile-injector/"
   },
   "openclaw": {
     "hooks": ["./"]
@@ -19,6 +23,9 @@
     "groups",
     "social-awareness"
   ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/clawSean/claw-machine.git"
