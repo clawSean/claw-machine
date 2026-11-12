@@ -2,23 +2,17 @@ function yamlQuote(value: string): string {
   return JSON.stringify(value);
 }
 
-function ensureContactIdentityList(content: string, identity: string): string {
+function ensureContactPrimaryId(content: string, identity: string): string {
   const match = content.match(/^(---\r?\n)([\s\S]*?)(\r?\n---(?:\r?\n|$))/u);
   if (!match) {
-    return `---\nid: ${yamlQuote(identity)}\nidentities:\n  - ${yamlQuote(identity)}\n---\n\n${content}`;
+    return `---\nid: ${yamlQuote(identity)}\n---\n\n${content}`;
   }
 
   const frontmatter = match[2] ?? '';
-  if (/^identities:\s*/mu.test(frontmatter)) return content;
+  if (/^id:\s*/mu.test(frontmatter)) return content;
 
   const lineEnding = content.includes('\r\n') ? '\r\n' : '\n';
-  const idPattern = /^id:\s*.*$/mu;
-  const newFrontmatter = idPattern.test(frontmatter)
-    ? frontmatter.replace(
-        idPattern,
-        (line) => `${line}${lineEnding}identities:${lineEnding}  - ${yamlQuote(identity)}`,
-      )
-    : `id: ${yamlQuote(identity)}${lineEnding}identities:${lineEnding}  - ${yamlQuote(identity)}${lineEnding}${frontmatter}`;
+  const newFrontmatter = `id: ${yamlQuote(identity)}${lineEnding}${frontmatter}`;
 
   return `${match[1]}${newFrontmatter}${match[3]}${content.slice(match[0].length)}`;
 }
@@ -46,7 +40,7 @@ function renderProfileTemplate(
     .replaceAll('<Name>', displayName)
     .replaceAll('YYYY-MM-DD', date);
 
-  if (params.kind === 'contact') rendered = ensureContactIdentityList(rendered, identity);
+  if (params.kind === 'contact') rendered = ensureContactPrimaryId(rendered, identity);
   return rendered;
 }
 
@@ -61,7 +55,7 @@ async function createProfileIfMissing(params: ProfileCreation): Promise<boolean>
     const heading = params.displayName?.trim() || params.id;
     template =
       params.kind === 'contact'
-        ? `---\nid: ${yamlQuote(identity)}\nidentities:\n  - ${yamlQuote(identity)}\ncreated: "YYYY-MM-DD"\n---\n\n# Profile: <Name>\n\n*Auto-created by profile-injector.*\n`
+        ? `---\nid: ${yamlQuote(identity)}\ncreated: "YYYY-MM-DD"\n---\n\n# Profile: <Name>\n\n*Auto-created by profile-injector.*\n`
         : `---\nid: ${yamlQuote(identity)}\ntype: "group"\ncreated: "YYYY-MM-DD"\nmembers: []\n---\n\n# Social memory for <Name>\n\n*Auto-created by profile-injector.*\n`;
     template = template.replaceAll('<Name>', heading);
   }

@@ -35,7 +35,7 @@ const PHONE_CHANNELS = new Set([
   'whatsapp',
 ]);
 
-type ChatType = 'direct' | 'group' | 'channel';
+type ChatType = 'direct' | 'group' | 'channel' | 'room';
 type ProfileDepth = 'full' | 'medium' | 'small';
 
 type SessionAddress = {
@@ -148,6 +148,17 @@ function isSafeProfileId(value: string): boolean {
     value !== '.' &&
     value !== '..' &&
     !/[\0\r\n/\\]/u.test(value) &&
+    !/^\s|\s$/u.test(value)
+  );
+}
+
+/** Validate a provider identity value without treating it as a file name. */
+function isSafeIdentityValue(value: string): boolean {
+  return (
+    value.length > 0 &&
+    value.length <= MAX_PROFILE_ID_CHARS &&
+    !/[\0\r\n]/u.test(value) &&
+    !/(^|[\\/])\.{1,2}($|[\\/])/u.test(value) &&
     !/^\s|\s$/u.test(value)
   );
 }

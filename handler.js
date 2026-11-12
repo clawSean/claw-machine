@@ -49,6 +49,9 @@ function profileDepth(value) {
 function isSafeProfileId(value) {
     return value.length > 0 && value.length <= MAX_PROFILE_ID_CHARS && value !== '.' && value !== '..' && !/[\0\r\n/\\]/u.test(value) && !/^\s|\s$/u.test(value);
 }
+function isSafeIdentityValue(value) {
+    return value.length > 0 && value.length <= MAX_PROFILE_ID_CHARS && !/[\0\r\n]/u.test(value) && !/(^|[\\/])\.{1,2}($|[\\/])/u.test(value) && !/^\s|\s$/u.test(value);
+}
 function isPlaceholderIdentity(channel, value) {
     const normalizedChannel = channel.toLowerCase();
     const normalizedValue = value.toLowerCase();
@@ -67,7 +70,7 @@ function normalizeIdentity(channelOrIdentity, maybeId) {
         value = maybeId.trim();
     }
     channel = channel.toLowerCase();
-    if (!/^[a-z0-9][a-z0-9_-]{0,63}$/u.test(channel) || !isSafeProfileId(value)) return null;
+    if (!/^[a-z0-9][a-z0-9_-]{0,63}$/u.test(channel) || !isSafeIdentityValue(value)) return null;
     if (isPlaceholderIdentity(channel, value)) return null;
     if (PHONE_CHANNELS.has(channel) && value.startsWith('+')) {
         const digits = value.slice(1).replace(/[\s().-]/gu, '');
@@ -85,10 +88,14 @@ function parseSessionAddress(sessionKey) {
     if (parts[0] !== 'agent' || parts.length < 5) return null;
     const channel = parts[2]?.trim().toLowerCase();
     const type = parts[3];
-    const id = parts[4]?.trim();
+    let idEnd = parts.length;
+    while(idEnd >= 7 && (parts[idEnd - 2] === 'thread' || parts[idEnd - 2] === 'topic')){
+        idEnd -= 2;
+    }
+    const id = parts.slice(4, idEnd).join(':').trim();
     if (!channel || !/^[a-z0-9][a-z0-9_-]{0,63}$/u.test(channel)) return null;
-    if (type !== 'direct' && type !== 'group' && type !== 'channel') return null;
-    if (!id || !isSafeProfileId(id)) return null;
+    if (type !== 'direct' && type !== 'group' && type !== 'channel' && type !== 'room') return null;
+    if (!id || !isSafeIdentityValue(id)) return null;
     return {
         channel,
         type,
@@ -166,14 +173,14 @@ function getMemberIds(content) {
     if (!frontmatter) return [];
     const uniqueIds = new Set();
     for (const id of getFrontmatterList(frontmatter, 'members')){
-        if (isSafeProfileId(id)) uniqueIds.add(id);
+        if (isSafeIdentityValue(id)) uniqueIds.add(id);
     }
     return [
         ...uniqueIds
     ];
 }
 function addMemberToFrontmatter(content, senderId) {
-    if (!isSafeProfileId(senderId) || getMemberIds(content).includes(senderId)) return null;
+    if (!isSafeIdentityValue(senderId) || getMemberIds(content).includes(senderId)) return null;
     const match = content.match(/^(---\r?\n)([\s\S]*?)(\r?\n---(?:\r?\n|$))/u);
     if (!match) return null;
     const lineEnding = content.includes('\r\n') ? '\r\n' : '\n';
@@ -238,8 +245,9 @@ function resolveProfileDirectories(workspaceDir, hookConfig) {
     };
 }
 function safeProfileFilePath(directory, channel, id) {
-    if (!/^[a-z0-9][a-z0-9_-]{0,63}$/u.test(channel) || !isSafeProfileId(id)) return null;
-    const filePath = path.resolve(directory, `${channel}-${id}.md`);
+    if (!/^[a-z0-9][a-z0-9_-]{0,63}$/u.test(channel) || !isSafeIdentityValue(id)) return null;
+    const fileId = isSafeProfileId(id) ? id : `~${Buffer.from(id, 'utf8').toString('base64url')}`;
+    const filePath = path.resolve(directory, `${channel}-${fileId}.md`);
     return isPathInside(directory, filePath) ? filePath : null;
 }
 function identityResolutionOptions(hookConfig) {
@@ -453,16 +461,15 @@ async function resolveContactProfile(params) {
 function yamlQuote(value) {
     return JSON.stringify(value);
 }
-function ensureContactIdentityList(content, identity) {
+function ensureContactPrimaryId(content, identity) {
     const match = content.match(/^(---\r?\n)([\s\S]*?)(\r?\n---(?:\r?\n|$))/u);
     if (!match) {
-        return `---\nid: ${yamlQuote(identity)}\nidentities:\n  - ${yamlQuote(identity)}\n---\n\n${content}`;
+        return `---\nid: ${yamlQuote(identity)}\n---\n\n${content}`;
     }
     const frontmatter = match[2] ?? '';
-    if (/^identities:\s*/mu.test(frontmatter)) return content;
+    if (/^id:\s*/mu.test(frontmatter)) return content;
     const lineEnding = content.includes('\r\n') ? '\r\n' : '\n';
-    const idPattern = /^id:\s*.*$/mu;
-    const newFrontmatter = idPattern.test(frontmatter) ? frontmatter.replace(idPattern, (line)=>`${line}${lineEnding}identities:${lineEnding}  - ${yamlQuote(identity)}`) : `id: ${yamlQuote(identity)}${lineEnding}identities:${lineEnding}  - ${yamlQuote(identity)}${lineEnding}${frontmatter}`;
+    const newFrontmatter = `id: ${yamlQuote(identity)}${lineEnding}${frontmatter}`;
     return `${match[1]}${newFrontmatter}${match[3]}${content.slice(match[0].length)}`;
 }
 function renderProfileTemplate(template, params) {
@@ -470,7 +477,7 @@ function renderProfileTemplate(template, params) {
     const displayName = params.displayName?.trim() || params.id;
     const date = params.date ?? new Date().toISOString().slice(0, 10);
     let rendered = template.replaceAll('<channel>:<user_id>', identity).replaceAll('<channel>:<group_id>', identity).replaceAll('<channel>', params.channel).replaceAll('<user_id>', params.id).replaceAll('<group_id>', params.id).replaceAll('<Name>', displayName).replaceAll('YYYY-MM-DD', date);
-    if (params.kind === 'contact') rendered = ensureContactIdentityList(rendered, identity);
+    if (params.kind === 'contact') rendered = ensureContactPrimaryId(rendered, identity);
     return rendered;
 }
 async function createProfileIfMissing(params) {
@@ -481,7 +488,7 @@ async function createProfileIfMissing(params) {
     } else {
         const identity = `${params.channel}:${params.id}`;
         const heading = params.displayName?.trim() || params.id;
-        template = params.kind === 'contact' ? `---\nid: ${yamlQuote(identity)}\nidentities:\n  - ${yamlQuote(identity)}\ncreated: "YYYY-MM-DD"\n---\n\n# Profile: <Name>\n\n*Auto-created by profile-injector.*\n` : `---\nid: ${yamlQuote(identity)}\ntype: "group"\ncreated: "YYYY-MM-DD"\nmembers: []\n---\n\n# Social memory for <Name>\n\n*Auto-created by profile-injector.*\n`;
+        template = params.kind === 'contact' ? `---\nid: ${yamlQuote(identity)}\ncreated: "YYYY-MM-DD"\n---\n\n# Profile: <Name>\n\n*Auto-created by profile-injector.*\n` : `---\nid: ${yamlQuote(identity)}\ntype: "group"\ncreated: "YYYY-MM-DD"\nmembers: []\n---\n\n# Social memory for <Name>\n\n*Auto-created by profile-injector.*\n`;
         template = template.replaceAll('<Name>', heading);
     }
     const content = renderProfileTemplate(template, {
@@ -710,9 +717,9 @@ async function handleRosterEvent(event, senderId, metadata = {}) {
     const sessionKey = event.sessionKey;
     if (!sessionKey || senderId === undefined || senderId === null) return;
     const address = parseSessionAddress(sessionKey);
-    if (!address || address.type !== 'group' && address.type !== 'channel') return;
+    if (!address || address.type !== 'group' && address.type !== 'channel' && address.type !== 'room') return;
     const sender = String(senderId).trim();
-    if (!isSafeProfileId(sender)) return;
+    if (!isSafeIdentityValue(sender)) return;
     const context = event.context || {};
     const runtime = await resolveRuntime(context.cfg, context.workspaceDir);
     const hookConfig = runtime.hookConfig;
@@ -776,5 +783,5 @@ const handler = async (event)=>{
         return handleCommandNew(event);
     }
 };
-export { addMemberToFrontmatter, buildContactIndex, capContent, clearRuntimeCaches, extractContactIdentities, getMemberIds, invalidateContactIndex, normalizeIdentity, parseSessionAddress, renderProfileTemplate, resolveContactProfile };
+export { addMemberToFrontmatter, buildContactIndex, capContent, clearRuntimeCaches, extractContactIdentities, getMemberIds, invalidateContactIndex, normalizeIdentity, parseSessionAddress, renderProfileTemplate, resolveContactProfile, safeProfileFilePath };
 export default handler;

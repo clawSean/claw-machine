@@ -104,7 +104,7 @@ test('injects a canonical contact into Discord text and voice channel sessions',
   await assert.rejects(fs.access(path.join(workspace, 'memory/contacts/discord-123456789012345678.md')));
 });
 
-test('renders real IDs and aliases when createOnMiss copies the contact template', async () => {
+test('renders a sparse primary ID without empty or redundant aliases on createOnMiss', async () => {
   const workspace = await makeWorkspace();
   await write(
     workspace,
@@ -129,9 +129,46 @@ test('renders real IDs and aliases when createOnMiss copies the contact template
     'utf-8',
   );
   assert.match(created, /id: "telegram:77"/u);
-  assert.match(created, /identities:\n  - "telegram:77"/u);
+  assert.doesNotMatch(created, /^identities:/mu);
   assert.doesNotMatch(created, /<channel>|<user_id>|<Name>|YYYY-MM-DD/u);
   assert.equal(bootstrapFiles.length, 1);
+});
+
+test('resolves a colon-bearing Matrix identity and an encoded Google Chat room path', async () => {
+  const workspace = await makeWorkspace();
+  const canonicalPath = await write(
+    workspace,
+    'memory/contacts/person.md',
+    '---\nid: "telegram:1"\nidentities:\n  - "matrix:@alice:example.org"\n---\n\n# Person\n',
+  );
+  const matrixFiles = [];
+
+  await handler({
+    type: 'agent',
+    action: 'bootstrap',
+    context: {
+      sessionKey: 'agent:main:matrix:direct:@alice:example.org',
+      workspaceDir: workspace,
+      bootstrapFiles: matrixFiles,
+      cfg: hookConfig(),
+    },
+  });
+  assert.equal(matrixFiles[0].path, canonicalPath);
+
+  const roomFiles = [];
+  await handler({
+    type: 'agent',
+    action: 'bootstrap',
+    context: {
+      sessionKey: 'agent:main:googlechat:group:spaces/AAA-BBB',
+      workspaceDir: workspace,
+      bootstrapFiles: roomFiles,
+      cfg: hookConfig({ createOnMiss: true }),
+    },
+  });
+  assert.equal(roomFiles[0].name, 'CHANNEL_PROFILE.md');
+  assert.equal(path.basename(roomFiles[0].path), 'googlechat-~c3BhY2VzL0FBQS1CQkI.md');
+  assert.match(roomFiles[0].content, /id: "googlechat:spaces\/AAA-BBB"/u);
 });
 
 test('serializes concurrent auto-roster writes without losing members', async () => {

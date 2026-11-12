@@ -22,6 +22,7 @@ export {
   parseSessionAddress,
   renderProfileTemplate,
   resolveContactProfile,
+  safeProfileFilePath,
 };
 
 export default handler;

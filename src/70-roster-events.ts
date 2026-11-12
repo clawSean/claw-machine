@@ -3,10 +3,13 @@ async function handleRosterEvent(event: any, senderId: unknown, metadata: any = 
   if (!sessionKey || senderId === undefined || senderId === null) return;
 
   const address = parseSessionAddress(sessionKey);
-  if (!address || (address.type !== 'group' && address.type !== 'channel')) return;
+  if (
+    !address ||
+    (address.type !== 'group' && address.type !== 'channel' && address.type !== 'room')
+  ) return;
 
   const sender = String(senderId).trim();
-  if (!isSafeProfileId(sender)) return;
+  if (!isSafeIdentityValue(sender)) return;
 
   const context = event.context || {};
   const runtime = await resolveRuntime(context.cfg, context.workspaceDir);

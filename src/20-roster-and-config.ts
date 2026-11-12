@@ -1,6 +1,6 @@
 /** Add a member ID to frontmatter without parsing or rewriting the whole YAML document. */
 function addMemberToFrontmatter(content: string, senderId: string): string | null {
-  if (!isSafeProfileId(senderId) || getMemberIds(content).includes(senderId)) return null;
+  if (!isSafeIdentityValue(senderId) || getMemberIds(content).includes(senderId)) return null;
 
   const match = content.match(/^(---\r?\n)([\s\S]*?)(\r?\n---(?:\r?\n|$))/u);
   if (!match) return null;
@@ -101,8 +101,11 @@ function resolveProfileDirectories(workspaceDir: string, hookConfig: any): Profi
   };
 }
 function safeProfileFilePath(directory: string, channel: string, id: string): string | null {
-  if (!/^[a-z0-9][a-z0-9_-]{0,63}$/u.test(channel) || !isSafeProfileId(id)) return null;
-  const filePath = path.resolve(directory, `${channel}-${id}.md`);
+  if (!/^[a-z0-9][a-z0-9_-]{0,63}$/u.test(channel) || !isSafeIdentityValue(id)) return null;
+  const fileId = isSafeProfileId(id)
+    ? id
+    : `~${Buffer.from(id, 'utf8').toString('base64url')}`;
+  const filePath = path.resolve(directory, `${channel}-${fileId}.md`);
   return isPathInside(directory, filePath) ? filePath : null;
 }
 

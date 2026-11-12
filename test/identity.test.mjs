@@ -12,6 +12,7 @@ import {
   normalizeIdentity,
   parseSessionAddress,
   resolveContactProfile,
+  safeProfileFilePath,
 } from '../handler.js';
 import { makeWorkspace, registerCleanup, write } from '../test-support/helpers.mjs';
 
@@ -25,6 +26,38 @@ test('normalizes explicit identities without cross-channel guessing', () => {
   assert.equal(normalizeIdentity('<channel>:<user_id>'), null);
   assert.equal(normalizeIdentity('telegram:UNKNOWN'), null);
   assert.equal(normalizeIdentity('telegram:../../private'), null);
+  assert.equal(normalizeIdentity('googlechat:spaces/AAA-BBB'), 'googlechat:spaces/AAA-BBB');
+  assert.equal(normalizeIdentity('matrix:@alice:example.org'), 'matrix:@alice:example.org');
+  assert.equal(normalizeIdentity('msteams:19:meeting_abc@thread.v2'), 'msteams:19:meeting_abc@thread.v2');
+});
+
+test('accepts every documented channel through one provider-agnostic schema', () => {
+  const documentedChannels = [
+    'discord',
+    'feishu',
+    'googlechat',
+    'imessage',
+    'irc',
+    'line',
+    'matrix',
+    'mattermost',
+    'msteams',
+    'nextcloud-talk',
+    'nostr',
+    'signal',
+    'slack',
+    'sms',
+    'synology-chat',
+    'telegram',
+    'twitch',
+    'whatsapp',
+    'zalo',
+    'zalouser',
+  ];
+
+  for (const channel of documentedChannels) {
+    assert.equal(normalizeIdentity(channel, 'provider/native:id'), `${channel}:provider/native:id`);
+  }
 });
 
 test('parses only supported, path-safe session addresses', () => {
@@ -35,6 +68,34 @@ test('parses only supported, path-safe session addresses', () => {
   });
   assert.equal(parseSessionAddress('agent:main:telegram:direct:../../bad'), null);
   assert.equal(parseSessionAddress('agent:main:telegram:thread:1'), null);
+  assert.deepEqual(parseSessionAddress('agent:main:matrix:direct:@alice:example.org'), {
+    channel: 'matrix',
+    type: 'direct',
+    id: '@alice:example.org',
+  });
+  assert.deepEqual(
+    parseSessionAddress('agent:main:msteams:channel:19:meeting_abc@thread.v2:thread:root'),
+    {
+      channel: 'msteams',
+      type: 'channel',
+      id: '19:meeting_abc@thread.v2',
+    },
+  );
+  assert.deepEqual(parseSessionAddress('agent:main:nextcloud-talk:room:abc:server'), {
+    channel: 'nextcloud-talk',
+    type: 'room',
+    id: 'abc:server',
+  });
+});
+
+test('uses deterministic encoded filenames only when provider IDs are not path-safe', () => {
+  assert.equal(
+    path.basename(safeProfileFilePath('/tmp/contacts', 'telegram', '123')),
+    'telegram-123.md',
+  );
+  const encoded = safeProfileFilePath('/tmp/contacts', 'googlechat', 'spaces/AAA-BBB');
+  assert.equal(path.basename(encoded), 'googlechat-~c3BhY2VzL0FBQS1CQkI.md');
+  assert.equal(safeProfileFilePath('/tmp/contacts', 'telegram', 'bad\nvalue'), null);
 });
 
 test('reads legacy id plus block and inline identity aliases', () => {

@@ -16,7 +16,7 @@ function normalizeIdentity(channelOrIdentity: string, maybeId?: string): string 
   }
 
   channel = channel.toLowerCase();
-  if (!/^[a-z0-9][a-z0-9_-]{0,63}$/u.test(channel) || !isSafeProfileId(value)) return null;
+  if (!/^[a-z0-9][a-z0-9_-]{0,63}$/u.test(channel) || !isSafeIdentityValue(value)) return null;
   if (isPlaceholderIdentity(channel, value)) return null;
 
   if (PHONE_CHANNELS.has(channel) && value.startsWith('+')) {
@@ -38,11 +38,18 @@ function parseSessionAddress(sessionKey: string): SessionAddress | null {
 
   const channel = parts[2]?.trim().toLowerCase();
   const type = parts[3] as ChatType | undefined;
-  const id = parts[4]?.trim();
+  let idEnd = parts.length;
+  while (
+    idEnd >= 7 &&
+    (parts[idEnd - 2] === 'thread' || parts[idEnd - 2] === 'topic')
+  ) {
+    idEnd -= 2;
+  }
+  const id = parts.slice(4, idEnd).join(':').trim();
 
   if (!channel || !/^[a-z0-9][a-z0-9_-]{0,63}$/u.test(channel)) return null;
-  if (type !== 'direct' && type !== 'group' && type !== 'channel') return null;
-  if (!id || !isSafeProfileId(id)) return null;
+  if (type !== 'direct' && type !== 'group' && type !== 'channel' && type !== 'room') return null;
+  if (!id || !isSafeIdentityValue(id)) return null;
 
   return { channel, type, id };
 }
@@ -135,7 +142,7 @@ function getMemberIds(content: string): string[] {
 
   const uniqueIds = new Set<string>();
   for (const id of getFrontmatterList(frontmatter, 'members')) {
-    if (isSafeProfileId(id)) uniqueIds.add(id);
+    if (isSafeIdentityValue(id)) uniqueIds.add(id);
   }
   return [...uniqueIds];
 }

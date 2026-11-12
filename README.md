@@ -31,13 +31,13 @@ limited to trusted participants; it is room context, not per-speaker isolation.
 
 ## One Person, Multiple Channels
 
-Choose one canonical contact file and list only identities you have verified:
+Choose one canonical contact file. `id` is the verified primary identity;
+add `identities` only when the person has another verified channel identity:
 
 ```yaml
 ---
 id: "telegram:123456789"
 identities:
-  - "telegram:123456789"
   - "imessage:+12065550100"
   - "sms:+12065550100"
   - "slack:U01234567"
@@ -59,6 +59,13 @@ people. `session.identityLinks` is also deliberately separate: it changes
 OpenClaw session routing, while Claw Machine changes only profile resolution.
 Provider IDs that are workspace/account-scoped must be unique in this contact
 set; current bootstrap session keys do not expose a separate account scope.
+
+The schema is provider-agnostic: a new channel uses the same lowercase
+`provider:native-id` string and needs no Claw Machine code change. Native IDs
+may contain colons or slashes. For room/contact files created from IDs that are
+not safe filename segments, Claw Machine uses a deterministic `~base64url`
+filename while preserving the exact native ID in frontmatter. `topic:` and
+`thread:` are reserved session-key suffixes and are not part of the identity.
 
 ## Performance Model
 
@@ -187,7 +194,8 @@ Then, per real person:
 
 1. Pick the canonical file after reviewing every duplicate's facts and trust.
 2. Merge only verified facts into it.
-3. Add every verified `channel:id` to `identities:`.
+3. Keep the primary verified `channel:id` in `id:` and add only additional
+   verified identities to `identities:`; omit the list when there are none.
 4. Remove or archive duplicate live profiles; do not leave two claimants.
 5. Re-run the audit until `explicitIdentityCollisions` is empty.
 6. Deploy with rollback ready, restart, and prove both DM and group-member paths.

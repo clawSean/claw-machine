@@ -1,10 +1,23 @@
 # Changelog
 
-## Unreleased — Discord voice profile continuity
+## v0.4.0 — Portable Canonical Identity Activation
+
+*2026-11-12*
 
 - Documented the verified Discord voice-room roster path and added a regression
   case proving both Discord text and voice channel sessions inject one
   cross-channel canonical contact profile.
+- Generalized identity validation and session parsing for provider-native IDs
+  containing colons or slashes, including Matrix, Microsoft Teams, Google Chat,
+  and Nextcloud Talk shapes.
+- Added deterministic `~base64url` filenames for provider IDs that are valid
+  identities but unsafe filename segments.
+- Reserved trailing `topic:` and `thread:` session-key suffixes so they do not
+  leak into canonical identities.
+- Made `id:` the sole primary identity and kept `identities:` sparse for verified
+  aliases only, avoiding redundant aliases on generated contact profiles.
+- Expanded regression coverage to 19 tests and verified the migration tooling
+  against a collision-free, fully consolidated contact set.
 
 ## v4 — Canonical Cross-Channel Identities, Bounded Hot Path, and Safer Writes
 

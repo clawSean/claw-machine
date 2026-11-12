@@ -40,7 +40,6 @@ keeps group membership frontmatter synchronized.
 ---
 id: "telegram:123"
 identities:
-  - "telegram:123"
   - "imessage:+12065550100"
   - "sms:+12065550100"
   - "slack:U01234567"
@@ -50,7 +49,8 @@ identities:
 Rules:
 
 1. Only explicit `channel:id` claims participate.
-2. Legacy `id:` remains an alias.
+2. `id:` is the primary identity; optional `identities:` contains only
+   additional verified aliases and is omitted when empty.
 3. Phone-like `+E.164` values get punctuation/spacing normalization; iMessage
    emails and Twitter handles get case normalization.
 4. Names and prose never participate.
@@ -59,6 +59,10 @@ Rules:
 6. `session.identityLinks` is intentionally not read or changed.
 7. Provider IDs that are account/workspace-scoped must be unique in this
    contact set because the bootstrap session key has no separate account scope.
+8. The provider key is lowercase and generic; native IDs may contain colons or
+   slashes. Unsafe filename segments are encoded deterministically as
+   `~base64url`, so future providers do not require parser changes.
+9. `topic:` and `thread:` are reserved session-key suffixes, not identity data.
 
 ## Resolution and Cache
 
@@ -136,9 +140,8 @@ placeholders are rendered:
 - `<channel>:<user_id>`, `<channel>:<group_id>`
 - `<Name>`, `YYYY-MM-DD`
 
-New contact profiles always gain an `identities:` list even when an older
-template does not include one. Writes use exclusive create semantics to avoid
-races.
+New contact profiles contain only the primary `id:` unless a verified alias is
+added later. Writes use exclusive create semantics to avoid races.
 
 ## Group Roster Contract
 
