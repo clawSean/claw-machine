@@ -21,6 +21,14 @@ Group frontmatter keeps a flat `members:` roster. The hook auto-adds senders on
 `message:received` and `command:new`, then resolves every member through the
 same contact index used for DMs.
 
+Discord text and voice channels both use `agent:<agent>:discord:channel:<id>`.
+Add a verified `discord:<user-id>` identity to the person's canonical contact
+file. For a voice-only room, seed its `memory/groups/discord-<voice-channel-id>.md`
+`members:` list with verified participant IDs: voice turns do not emit the
+`message:received` event that auto-rosters text senders. The voice room then
+injects those canonical member profiles at agent bootstrap. Keep the roster
+limited to trusted participants; it is room context, not per-speaker isolation.
+
 ## One Person, Multiple Channels
 
 Choose one canonical contact file and list only identities you have verified:

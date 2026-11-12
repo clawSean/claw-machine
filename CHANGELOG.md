@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Discord voice profile continuity
+
+- Documented the verified Discord voice-room roster path and added a regression
+  case proving both Discord text and voice channel sessions inject one
+  cross-channel canonical contact profile.
+
 ## v4 — Canonical Cross-Channel Identities, Bounded Hot Path, and Safer Writes
 
 *2026-07-31*

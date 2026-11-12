@@ -66,6 +66,44 @@ test('resolves group members through the same index and deduplicates canonical f
   assert.equal(bootstrapFiles[1].path, canonicalPath);
 });
 
+test('injects a canonical contact into Discord text and voice channel sessions', async () => {
+  const workspace = await makeWorkspace();
+  const canonicalPath = await write(
+    workspace,
+    'memory/contacts/telegram-owner.md',
+    '---\nid: "telegram:1"\nidentities:\n  - "discord:123456789012345678"\n---\n\n# Owner\n',
+  );
+  const cfg = hookConfig({ groupInclusion: { enabled: true, maxContacts: 10 } });
+
+  for (const channelId of ['text-channel', 'voice-channel']) {
+    await write(
+      workspace,
+      `memory/groups/discord-${channelId}.md`,
+      `---\nid: "discord:${channelId}"\nmembers:\n  - "123456789012345678"\n---\n\n# ${channelId}\n`,
+    );
+    const bootstrapFiles = [];
+    await handler({
+      type: 'agent',
+      action: 'bootstrap',
+      context: {
+        sessionKey: `agent:main:discord:channel:${channelId}`,
+        workspaceDir: workspace,
+        bootstrapFiles,
+        cfg,
+      },
+    });
+
+    assert.deepEqual(bootstrapFiles.map((file) => file.name), [
+      'CHANNEL_PROFILE.md',
+      'MEMBER_PROFILE_123456789012345678.md',
+    ]);
+    assert.equal(bootstrapFiles[1].path, canonicalPath);
+    assert.match(bootstrapFiles[1].content, /# Owner/u);
+  }
+
+  await assert.rejects(fs.access(path.join(workspace, 'memory/contacts/discord-123456789012345678.md')));
+});
+
 test('renders real IDs and aliases when createOnMiss copies the contact template', async () => {
   const workspace = await makeWorkspace();
   await write(

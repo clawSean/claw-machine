@@ -21,6 +21,9 @@ keeps group membership frontmatter synchronized.
   `members:` list, then resolve each member through the same contact index.
 - Member files are deduplicated by canonical path and bounded by count, depth,
   and aggregate characters.
+- Discord voice channel sessions use the same `channel` shape as Discord text;
+  voice-only rooms need verified participant IDs seeded in `members:` because
+  voice turns do not emit `message:received` for auto-roster.
 
 ### `message:received` and `command:new`
 
