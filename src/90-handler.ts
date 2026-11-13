@@ -19,6 +19,7 @@ export {
   getMemberIds,
   invalidateContactIndex,
   normalizeIdentity,
+  parseBootstrapSender,
   parseSessionAddress,
   renderProfileTemplate,
   resolveContactProfile,

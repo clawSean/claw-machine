@@ -54,6 +54,16 @@ function parseSessionAddress(sessionKey: string): SessionAddress | null {
   return { channel, type, id };
 }
 
+/** Resolve a run-scoped sender only from host-supplied bootstrap metadata. */
+function parseBootstrapSender(context: any): Pick<SessionAddress, 'channel' | 'id'> | null {
+  const channel = String(context?.messageChannel || context?.messageProvider || '')
+    .trim()
+    .toLowerCase();
+  const id = String(context?.senderId || context?.channelContext?.sender?.id || '').trim();
+  if (!channel || !id || !normalizeIdentity(channel, id)) return null;
+  return { channel, id };
+}
+
 function parseYamlScalar(rawValue: string): string | null {
   const value = rawValue.trim();
   if (!value) return null;

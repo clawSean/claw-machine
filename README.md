@@ -3,9 +3,9 @@
 Drop a coin, grab the right profile.
 
 Claw Machine is an [OpenClaw](https://openclaw.ai) internal hook that injects
-human-readable contact and room profiles into agent bootstrap context. Version 4
-lets one person keep one canonical profile across Telegram, iMessage, SMS,
-Slack, Discord, and other explicit channel identities.
+human-readable contact and room profiles into agent bootstrap context. Version 5
+lets one person keep one canonical profile across text, portal, phone, FaceTime,
+Discord voice, and other authenticated channel identities.
 
 It is intentionally local and boring: Markdown files, exact IDs, one small
 in-memory index, no database, no LLM lookup, and no fuzzy identity matching.
@@ -15,19 +15,24 @@ in-memory index, no database, no LLM lookup, and no fuzzy identity matching.
 | Conversation | Bootstrap context |
 |---|---|
 | Direct message | `CONTACT_PROFILE.md` from the resolved canonical contact file |
-| Group/channel | `CHANNEL_PROFILE.md` plus bounded member contact profiles |
+| Group/channel | `CHANNEL_PROFILE.md` plus the current sender and bounded member contact profiles |
 
 Group frontmatter keeps a flat `members:` roster. The hook auto-adds senders on
 `message:received` and `command:new`, then resolves every member through the
 same contact index used for DMs.
 
-Discord text and voice channels both use `agent:<agent>:discord:channel:<id>`.
-Add a verified `discord:<user-id>` identity to the person's canonical contact
-file. For a voice-only room, seed its `memory/groups/discord-<voice-channel-id>.md`
-`members:` list with verified participant IDs: voice turns do not emit the
-`message:received` event that auto-rosters text senders. The voice room then
-injects those canonical member profiles at agent bootstrap. Keep the roster
-limited to trusted participants; it is room context, not per-speaker isolation.
+Claw Machine first uses the authenticated sender facts exposed by modern
+OpenClaw bootstrap hooks. That gives phone, FaceTime, Discord voice, and other
+realtime surfaces per-speaker isolation even when their session key identifies
+a call or room rather than a person. The session-key identity remains the
+fallback for ordinary direct messages and compatible portal sessions. Unknown
+senders fail closed: no profile is guessed or created unless `createOnMiss` is
+explicitly enabled.
+
+For Discord voice, add the verified `discord:<user-id>` identity to the
+person's canonical contact file. The current speaker is injected separately
+from the voice room's bounded roster, preventing one participant from being
+mistaken for another.
 
 ## One Person, Multiple Channels
 
@@ -41,6 +46,9 @@ identities:
   - "imessage:+12065550100"
   - "sms:+12065550100"
   - "slack:U01234567"
+  - "phone:+12065550100"
+  - "facetime:person@example.com"
+  - "portal:person@example.com"
 name: "Example Person"
 ---
 ```
@@ -221,6 +229,9 @@ installs.
 - Run `openclaw hooks check` and `openclaw hooks info profile-injector`.
 - Check logs for `Identity collision`; the listed files must be reconciled.
 - Confirm aliases use exact `channel:id` values from OpenClaw session keys.
+- On realtime surfaces, confirm OpenClaw exposes `messageChannel` and the
+  authenticated `senderId` to `agent:bootstrap`; older hosts only get the
+  session-key fallback.
 - Confirm configured paths stay inside the workspace.
 - If aliases were edited, the watcher should invalidate immediately; the TTL
   guarantees a later rebuild even if the platform misses the event.

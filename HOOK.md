@@ -5,7 +5,7 @@ metadata:
   { "openclaw": { "emoji": "👤", "events": ["agent:bootstrap", "message:received", "command:new"] } }
 ---
 
-# Profile Injector v4
+# Profile Injector v5
 
 Injects deterministic social context before the system prompt is finalized and
 keeps group membership frontmatter synchronized.
@@ -14,16 +14,18 @@ keeps group membership frontmatter synchronized.
 
 ### `agent:bootstrap`
 
-- Parses `agent:<agentId>:<channel>:<type>:<id>`.
+- Prefers the run-scoped authenticated `messageChannel` + `senderId` pair when
+  OpenClaw provides it, then falls back to parsing
+  `agent:<agentId>:<channel>:<type>:<id>`.
 - Direct conversations resolve one canonical contact profile and inject it as
   `CONTACT_PROFILE.md`.
 - Groups inject their exact room profile as `CHANNEL_PROFILE.md`, parse its
-  `members:` list, then resolve each member through the same contact index.
+  `members:` list, and inject the current authenticated sender separately from
+  the bounded room roster.
 - Member files are deduplicated by canonical path and bounded by count, depth,
   and aggregate characters.
-- Discord voice channel sessions use the same `channel` shape as Discord text;
-  voice-only rooms need verified participant IDs seeded in `members:` because
-  voice turns do not emit `message:received` for auto-roster.
+- Phone, FaceTime, Discord voice, and other realtime surfaces resolve the
+  current person without guessing from a call UUID or room session key.
 
 ### `message:received` and `command:new`
 
@@ -177,6 +179,7 @@ Prove:
 5. create-on-miss placeholder rendering;
 6. auto-roster under concurrent inbound events;
 7. cache rebuild after an alias edit.
+8. current-sender isolation in a shared realtime room/call session.
 
 ## Failure Posture
 

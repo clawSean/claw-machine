@@ -34,6 +34,74 @@ test('injects one canonical DM profile through a cross-channel alias', async () 
   assert.match(bootstrapFiles[0].content, /# Example Person/u);
 });
 
+test('prefers the run-scoped verified sender when the session key is not an address', async () => {
+  const workspace = await makeWorkspace();
+  const canonicalPath = await write(
+    workspace,
+    'memory/contacts/caller.md',
+    '---\nid: "telegram:1"\nidentities:\n  - "phone:+12065550100"\n  - "facetime:jpop@example.com"\n---\n\n# Caller\n',
+  );
+
+  for (const context of [
+    { messageChannel: 'phone', messageProvider: 'voice', senderId: '+1 (206) 555-0100' },
+    {
+      messageChannel: 'facetime',
+      channelContext: { sender: { id: 'jpop@example.com' } },
+    },
+  ]) {
+    const bootstrapFiles = [];
+    await handler({
+      type: 'agent',
+      action: 'bootstrap',
+      context: {
+        ...context,
+        sessionKey: 'agent:main:voice:call:opaque-call-id',
+        workspaceDir: workspace,
+        bootstrapFiles,
+        cfg: hookConfig(),
+      },
+    });
+
+    assert.equal(bootstrapFiles.length, 1);
+    assert.equal(bootstrapFiles[0].name, 'CONTACT_PROFILE.md');
+    assert.equal(bootstrapFiles[0].path, canonicalPath);
+  }
+});
+
+test('injects the current Discord voice speaker without a pre-seeded room roster', async () => {
+  const workspace = await makeWorkspace();
+  const canonicalPath = await write(
+    workspace,
+    'memory/contacts/speaker.md',
+    '---\nid: "telegram:1"\nidentities:\n  - "discord:123456789012345678"\n---\n\n# Speaker\n',
+  );
+  await write(
+    workspace,
+    'memory/groups/discord-voice-room.md',
+    '---\nid: "discord:voice-room"\nmembers: []\n---\n\n# Voice room\n',
+  );
+  const bootstrapFiles = [];
+
+  await handler({
+    type: 'agent',
+    action: 'bootstrap',
+    context: {
+      sessionKey: 'agent:main:discord:channel:voice-room',
+      messageChannel: 'discord',
+      senderId: '123456789012345678',
+      workspaceDir: workspace,
+      bootstrapFiles,
+      cfg: hookConfig({ groupInclusion: { enabled: true, maxContacts: 10 } }),
+    },
+  });
+
+  assert.deepEqual(bootstrapFiles.map((file) => file.name), [
+    'CONTACT_PROFILE.md',
+    'CHANNEL_PROFILE.md',
+  ]);
+  assert.equal(bootstrapFiles[0].path, canonicalPath);
+});
+
 test('resolves group members through the same index and deduplicates canonical files', async () => {
   const workspace = await makeWorkspace();
   const canonicalPath = await write(

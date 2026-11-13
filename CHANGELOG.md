@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.5.0 — Authenticated Realtime Sender Resolution
+
+*2026-11-12*
+
+- Added run-scoped sender resolution from OpenClaw's authenticated
+  `messageChannel`, `senderId`, and channel sender context.
+- Added per-speaker bootstrap isolation for phone, FaceTime, and Discord voice
+  even when the durable session key identifies a call or room.
+- Added Portal email identities through the same exact canonical resolver.
+- Kept session-key identity as a compatibility fallback and retained the
+  fail-closed posture for unknown or colliding identities.
+- Expanded coverage to 21 tests and audited 92 identities with zero explicit
+  collisions and zero duplicate phone families.
+
 ## v0.4.0 — Portable Canonical Identity Activation
 
 *2026-11-12*

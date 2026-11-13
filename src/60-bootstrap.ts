@@ -4,7 +4,8 @@ async function handleBootstrap(event: any) {
   if (!sessionKey || !workspaceDir || !Array.isArray(bootstrapFiles)) return;
 
   const address = parseSessionAddress(sessionKey);
-  if (!address) return;
+  const senderAddress = parseBootstrapSender(context);
+  if (!address && !senderAddress) return;
 
   const hookConfig = cfg?.hooks?.internal?.entries?.['profile-injector'] || {};
   const createOnMiss = hookConfig.createOnMiss === true;
@@ -12,11 +13,12 @@ async function handleBootstrap(event: any) {
   const directories = resolveProfileDirectories(workspaceDir, hookConfig);
   const filesToInject: InjectionItem[] = [];
 
-  if (address.type === 'direct') {
+  const currentContact = senderAddress || (address?.type === 'direct' ? address : null);
+  if (currentContact) {
     const resolution = await resolveContactProfile({
       contactsDir: directories.contactsDir,
-      channel: address.channel,
-      id: address.id,
+      channel: currentContact.channel,
+      id: currentContact.id,
       options: identityOptions,
     });
 
@@ -27,8 +29,8 @@ async function handleBootstrap(event: any) {
         templatePath: templatePath(workspaceDir, hookConfig, 'contact'),
         workspaceDir,
         contactsDir: directories.contactsDir,
-        channel: address.channel,
-        id: address.id,
+        channel: currentContact.channel,
+        id: currentContact.id,
         kind: 'contact',
       });
     }
@@ -41,7 +43,9 @@ async function handleBootstrap(event: any) {
         kind: 'contact',
       });
     }
-  } else {
+  }
+
+  if (address && address.type !== 'direct') {
     const groupFilePath = safeProfileFilePath(
       directories.groupsDir,
       address.channel,
